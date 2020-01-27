@@ -3,6 +3,7 @@ package sqsq_test
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,6 +19,15 @@ func buildAwsConfig() *aws.Config {
 	return config
 }
 
+func Contains(s []string, t string) bool {
+	for _, e := range s {
+		if e == t {
+			return true
+		}
+	}
+	return false
+}
+
 func TestScenario(t *testing.T) {
 	a := buildAwsConfig()
 	q, err := sqsq.NewQueue(a, &sqsq.Config{Debug: true})
@@ -30,20 +40,43 @@ func TestScenario(t *testing.T) {
 		t.Fatalf("faild use queue: %v", err)
 	}
 
+	jobChan := make(chan *sqsq.Job, 2)
+
 	ctx, cancel := context.WithCancel(context.Background())
+	go q.WatchQueue(ctx, name, 2, 5, 5, jobChan)
 
-	jobChan := make(chan *sqsq.Job)
+	msgs := make([]string, 2)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			job := <-jobChan
+			defer job.Release()
 
-	go q.WatchQueue(ctx, name, 1, 5, 5, jobChan)
+			d := job.GetData()
+			msgs[i] = *d
+			job.Done()
 
-	body := "test-job"
-	q.PutJob(name, body, 0)
+			wg.Done()
+		}(i)
+	}
 
-	job := <-jobChan
-	d := job.GetData()
+	body1 := "test-job1"
+	if err := q.PutJob(name, body1, 0); err != nil {
+		t.Fatalf("failed to put job: %v", err)
+	}
+	body2 := "test-job2"
+	if err := q.PutJob(name, body2, 0); err != nil {
+		t.Fatalf("failed to put job: %v", err)
+	}
 
-	if *d != body {
-		t.Errorf("mismatch job message body. expect = %s, actual = %s", body, *d)
+	wg.Wait()
+
+	if !Contains(msgs, body1) {
+		t.Errorf("expect to receive job message[%s].", body1)
+	}
+	if !Contains(msgs, body2) {
+		t.Errorf("expect to receive job message[%s].", body2)
 	}
 
 	cancel()
