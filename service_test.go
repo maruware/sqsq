@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/maruware/sqsq"
 )
 
@@ -17,6 +19,14 @@ func buildAwsConfig() *aws.Config {
 	config.WithEndpoint(endpoint)
 
 	return config
+}
+
+func setupQueue(config *aws.Config, name string) {
+	sess := session.New(config)
+	s := sqs.New(sess)
+	s.CreateQueue(&sqs.CreateQueueInput{
+		QueueName: aws.String(name),
+	})
 }
 
 func Contains(s []string, t string) bool {
@@ -35,7 +45,9 @@ func TestScenario(t *testing.T) {
 		t.Fatalf("failed to construct queue: %v", err)
 	}
 
-	name := os.Getenv("SQS_QUEUE")
+	name := "my-queue"
+	setupQueue(a, name)
+
 	if err := q.UseQueue(name); err != nil {
 		t.Fatalf("faild use queue: %v", err)
 	}
