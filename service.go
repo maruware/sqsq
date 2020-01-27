@@ -145,8 +145,7 @@ func (q *Service) DrainQueue(ctx context.Context, queueName string, concurrency,
 		rcvChan <- true
 	}()
 
-	doneChan := make(chan bool)
-	errChan := make(chan error)
+	doneChan := make(chan error)
 
 	defer q.logger.Debugf("done drain queue: %s", queueName)
 
@@ -158,20 +157,18 @@ func (q *Service) DrainQueue(ctx context.Context, queueName string, concurrency,
 			go func() {
 				n, err := q.watchQueueProcess(u, concurrency, visibilityTimeout, waitTimeSeconds, ch)
 				if err != nil {
-					errChan <- err
+					doneChan <- err
 					return
 				}
 				q.logger.Debugf("queue message num = %d", n)
 				if n <= 0 {
-					doneChan <- true
+					doneChan <- nil
 					return
 				}
 				rcvChan <- true
 			}()
-		case err := <-errChan:
+		case err := <-doneChan:
 			return err
-		case <-doneChan:
-			return nil
 		}
 	}
 }
