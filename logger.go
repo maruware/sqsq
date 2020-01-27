@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// Logger interface for sqsq
 type Logger interface {
 	Debugf(format string, v ...interface{})
 	Printf(format string, v ...interface{})
@@ -18,6 +19,7 @@ type defaultLogger struct {
 	stderr *log.Logger
 }
 
+// NewDefaultLogger returns a default impl logger
 func NewDefaultLogger(debug bool) Logger {
 	return &defaultLogger{
 		debug:  debug,
