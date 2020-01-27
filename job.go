@@ -10,7 +10,7 @@ import (
 type Job struct {
 	msg      *sqs.Message
 	queueUrl *string
-	queue    *Queue
+	service  *Service
 
 	mu          sync.Mutex
 	released    bool
@@ -18,9 +18,9 @@ type Job struct {
 	success     bool
 }
 
-func NewJob(queue *Queue, queueUrl *string, msg *sqs.Message) *Job {
+func NewJob(queue *Service, queueUrl *string, msg *sqs.Message) *Job {
 	return &Job{
-		queue:    queue,
+		service:  queue,
 		queueUrl: queueUrl,
 		msg:      msg,
 		released: false,
@@ -37,21 +37,21 @@ func (j *Job) Release() {
 		return
 	}
 	if j.success {
-		_, err := j.queue.svc.DeleteMessage(&sqs.DeleteMessageInput{
+		_, err := j.service.svc.DeleteMessage(&sqs.DeleteMessageInput{
 			QueueUrl:      j.queueUrl,
 			ReceiptHandle: j.msg.ReceiptHandle,
 		})
 		if err != nil {
-			j.queue.logger.Errorf("failed delete job: %v", err)
+			j.service.logger.Errorf("failed delete job: %v", err)
 		}
 	} else {
-		_, err := j.queue.svc.ChangeMessageVisibility(&sqs.ChangeMessageVisibilityInput{
+		_, err := j.service.svc.ChangeMessageVisibility(&sqs.ChangeMessageVisibilityInput{
 			QueueUrl:          j.queueUrl,
 			ReceiptHandle:     j.msg.ReceiptHandle,
 			VisibilityTimeout: aws.Int64(0),
 		})
 		if err != nil {
-			j.queue.logger.Errorf("failed change to visible")
+			j.service.logger.Errorf("failed change to visible")
 		}
 	}
 

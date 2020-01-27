@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-type Queue struct {
+type Service struct {
 	svc            *sqs.SQS
 	queueNameToUrl map[string]*string
 	logger         Logger
@@ -21,7 +21,7 @@ type Config struct {
 	Logger Logger
 }
 
-func NewQueue(awsConfig *aws.Config, config *Config) (*Queue, error) {
+func New(awsConfig *aws.Config, config *Config) (*Service, error) {
 	sess := session.New(awsConfig)
 
 	svc := sqs.New(sess)
@@ -37,7 +37,7 @@ func NewQueue(awsConfig *aws.Config, config *Config) (*Queue, error) {
 		logger = NewDefaultLogger(debug)
 	}
 
-	return &Queue{
+	return &Service{
 		svc:            svc,
 		queueNameToUrl: map[string]*string{},
 		logger:         logger,
@@ -45,7 +45,7 @@ func NewQueue(awsConfig *aws.Config, config *Config) (*Queue, error) {
 }
 
 // UseQueue Cache a queue name to url map.
-func (q *Queue) UseQueue(name string) error {
+func (q *Service) UseQueue(name string) error {
 	u, err := q.svc.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: aws.String(name)})
 	if err != nil {
 		return fmt.Errorf("failed get queue url[%v]: %w", name, err)
@@ -55,7 +55,7 @@ func (q *Queue) UseQueue(name string) error {
 	return nil
 }
 
-func (q *Queue) PutJob(queueName string, body string, delay int64) error {
+func (q *Service) PutJob(queueName string, body string, delay int64) error {
 	u, ok := q.queueNameToUrl[queueName]
 	if !ok {
 		return fmt.Errorf("Bad queue name: %v", queueName)
@@ -73,7 +73,7 @@ func (q *Queue) PutJob(queueName string, body string, delay int64) error {
 	return nil
 }
 
-func (q *Queue) watchQueueProcess(queueUrl *string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) (int, error) {
+func (q *Service) watchQueueProcess(queueUrl *string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) (int, error) {
 	q.logger.Debugf("sqs receive message request: %s", *queueUrl)
 	in := &sqs.ReceiveMessageInput{
 		QueueUrl:            queueUrl,
@@ -103,7 +103,7 @@ func (q *Queue) watchQueueProcess(queueUrl *string, concurrency, visibilityTimeo
 	return len(res.Messages), nil
 }
 
-func (q *Queue) WatchQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
+func (q *Service) WatchQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
 	u, ok := q.queueNameToUrl[queueName]
 	if !ok {
 		return fmt.Errorf("Bad queue name: %s", queueName)
@@ -131,7 +131,7 @@ func (q *Queue) WatchQueue(ctx context.Context, queueName string, concurrency, v
 	}
 }
 
-func (q *Queue) DrainQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
+func (q *Service) DrainQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
 	q.logger.Debugf("start drain queue: %s", queueName)
 
 	u, ok := q.queueNameToUrl[queueName]

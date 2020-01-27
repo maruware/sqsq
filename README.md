@@ -7,7 +7,7 @@ Job Queue for Go based on SQS
 
 ```go
 config := aws.NewConfig()
-q, err := sqsq.NewQueue(config)
+q, err := sqsq.New(config)
 
 err := q.UseQueue("my-queue")
 jobChan := make(chan *sqsq.Job, 2)
@@ -36,6 +36,6 @@ for {
 ```go
 
 config := aws.NewConfig()
-q, err := sqsq.NewQueue(config)
+q, err := sqsq.New(config)
 err := q.PutJob("my-queue", "sample message", 0)
 ```

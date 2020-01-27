@@ -30,7 +30,7 @@ func Contains(s []string, t string) bool {
 
 func TestScenario(t *testing.T) {
 	a := buildAwsConfig()
-	q, err := sqsq.NewQueue(a, &sqsq.Config{Debug: true})
+	q, err := sqsq.New(a, &sqsq.Config{Debug: true})
 	if err != nil {
 		t.Fatalf("failed to construct queue: %v", err)
 	}
