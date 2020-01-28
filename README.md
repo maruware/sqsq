@@ -1,41 +1,68 @@
 # sqsq
+
+[![Actions Status](https://github.com/maruware/sqsq/workflows/Test/badge.svg)](https://github.com/maruware/sqsq/actions)
+
 Job Queue for Go based on SQS 
+
 
 ## Usage
 
-* worker
+### worker
 
 ```go
-config := aws.NewConfig()
-q, err := sqsq.New(config)
 
-err := q.UseQueue("my-queue")
-jobChan := make(chan *sqsq.Job, 2)
+import (
+    "github.com/maruware/sqsq"
+    "github.com/aws/aws-sdk-go/aws"
+)
 
-go q.WatchQueue(ctx, name, 2, 5, 5, jobChan)
+func startWorker(queueName string) {
+    config := aws.NewConfig()
+    q, err := sqsq.New(config)
 
-for {
-    select {
-    case job := <-jobChan:
-        go func () {
-            defer job.Release()
-            data := job.GetData()
+    err := q.UseQueue(queueName)
+    jobChan := make(chan *sqsq.Job, 2)
 
-            // do something
+    var concurrency int64 = 2
+    var visibilityTimeout int64 = 5
+    var waitTimeSeconds int64 = 20
+    go q.WatchQueue(ctx, queueName, concurrency, visibilityTimeout, waitTimeSeconds, jobChan)
 
-            job.Done()
-        }()
-    case <-ctx.Done():
-        return
+    for {
+        select {
+        case job := <-jobChan:
+            go func () {
+                defer job.Release()
+                data := job.GetData()
+
+                // do something
+
+                job.Done()
+            }()
+        case <-ctx.Done():
+            return
+        }
     }
 }
+
 ```
 
-* publisher
+### publisher
 
 ```go
+import (
+    "github.com/maruware/sqsq"
+    "github.com/aws/aws-sdk-go/aws"
+)
 
-config := aws.NewConfig()
-q, err := sqsq.New(config)
-err := q.PutJob("my-queue", "sample message", 0)
+func someProcess(queueName string) {
+    config := aws.NewConfig()
+    q, err := sqsq.New(config)
+
+    // do something
+
+    config := aws.NewConfig()
+    q, err := sqsq.New(config)
+    err := q.PutJob(queueName, "sample message", 0)
+}
 ```
