@@ -3,6 +3,7 @@ package sqsq
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -56,9 +57,9 @@ func (q *Service) UseQueue(name string) error {
 }
 
 func (q *Service) PutJob(queueName string, body string, delay int64) error {
-	u, ok := q.queueNameToUrl[queueName]
-	if !ok {
-		return fmt.Errorf("Bad queue name: %v", queueName)
+	u, err := q.getQueueUrl(queueName)
+	if err != nil {
+		return err
 	}
 
 	in := &sqs.SendMessageInput{
@@ -104,9 +105,9 @@ func (q *Service) watchQueueProcess(queueUrl *string, concurrency, visibilityTim
 }
 
 func (q *Service) WatchQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
-	u, ok := q.queueNameToUrl[queueName]
-	if !ok {
-		return fmt.Errorf("Bad queue name: %s", queueName)
+	u, err := q.getQueueUrl(queueName)
+	if err != nil {
+		return err
 	}
 
 	rcvChan := make(chan bool)
@@ -134,9 +135,9 @@ func (q *Service) WatchQueue(ctx context.Context, queueName string, concurrency,
 func (q *Service) DrainQueue(ctx context.Context, queueName string, concurrency, visibilityTimeout, waitTimeSeconds int64, ch chan<- *Job) error {
 	q.logger.Debugf("start drain queue: %s", queueName)
 
-	u, ok := q.queueNameToUrl[queueName]
-	if !ok {
-		return fmt.Errorf("Bad queue name: %s", queueName)
+	u, err := q.getQueueUrl(queueName)
+	if err != nil {
+		return err
 	}
 
 	rcvChan := make(chan bool)
@@ -171,4 +172,51 @@ func (q *Service) DrainQueue(ctx context.Context, queueName string, concurrency,
 			return err
 		}
 	}
+}
+
+func (q *Service) getQueueUrl(name string) (*string, error) {
+	u, ok := q.queueNameToUrl[name]
+	if !ok {
+		return nil, fmt.Errorf("Bad queue name: %s", name)
+	}
+	return u, nil
+}
+
+func (q *Service) getQueueAttributes(queueName string, attributeNames []*string) (*sqs.GetQueueAttributesOutput, error) {
+	u, err := q.getQueueUrl(queueName)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.svc.GetQueueAttributes(&sqs.GetQueueAttributesInput{
+		QueueUrl:       u,
+		AttributeNames: attributeNames,
+	})
+}
+
+func (q *Service) getIntAttribute(queueName, attr string) (int, error) {
+	r, err := q.getQueueAttributes(queueName, []*string{
+		aws.String(attr),
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	v := r.Attributes[attr]
+	l, err := strconv.Atoi(*v)
+	if err != nil {
+		return 0, err
+	}
+	return l, nil
+}
+
+func (q *Service) GetVisibleJobLength(queueName string) (int, error) {
+	attr := "ApproximateNumberOfMessages"
+	return q.getIntAttribute(queueName, attr)
+}
+
+func (q *Service) GetNotVisibleJobLength(queueName string) (int, error) {
+	attr := "ApproximateNumberOfMessagesNotVisible"
+	return q.getIntAttribute(queueName, attr)
 }

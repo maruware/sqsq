@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -92,4 +93,68 @@ func TestScenario(t *testing.T) {
 	}
 
 	cancel()
+}
+
+func TestPostpone(t *testing.T) {
+	a := buildAwsConfig()
+	q, err := sqsq.New(a, &sqsq.Config{Debug: true})
+	if err != nil {
+		t.Fatalf("failed to construct queue: %v", err)
+	}
+
+	name := "postpone-test"
+	setupQueue(a, name)
+
+	if err := q.UseQueue(name); err != nil {
+		t.Fatalf("faild use queue: %v", err)
+	}
+
+	jobChan := make(chan *sqsq.Job, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go q.WatchQueue(ctx, name, 1, 5, 5, jobChan)
+
+	msgChan := make(chan *string)
+	go func() {
+		job := <-jobChan
+		defer job.Release()
+
+		msgChan <- job.GetData()
+		err := job.Postpone(time.Second * 60)
+		if err != nil {
+			t.Error("failed to postpone")
+		}
+	}()
+
+	body := "test-job"
+	if err := q.PutJob(name, body, 0); err != nil {
+		t.Fatalf("failed to put job: %v", err)
+	}
+
+	msg := <-msgChan
+
+	if *msg != body {
+		t.Errorf("expect to receive job message[%s].", body)
+	}
+
+	cancel()
+
+	visibleLen, err := q.GetVisibleJobLength(name)
+	if err != nil {
+		t.Fatalf("failed to get visible job length")
+	}
+
+	if visibleLen != 0 {
+		t.Errorf("expect empty visible messaage if job was postponed. len = %d", visibleLen)
+	}
+
+	notVisibleLen, err := q.GetNotVisibleJobLength(name)
+	if err != nil {
+		t.Fatalf("failed to get not visible job length")
+	}
+
+	if notVisibleLen != 1 {
+		t.Errorf("expect 1 visible messaage if job was postponed. len = %d", notVisibleLen)
+	}
+
 }
