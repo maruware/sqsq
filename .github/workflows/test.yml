@@ -1,17 +1,19 @@
 name: Test
 on: [push]
-jobs:
-  services:
-    localstack:
-      image: localstack
-      env:
-        SERVICES: sqs
-      posts:
-        - 4567:4567
 
-  build:
-    name: Build
+jobs:
+  test:
+    name: Test
     runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        image: localstack/localstack
+        env:
+          SERVICES: sqs
+        ports:
+          - 4576:4576
+
     steps:
 
     - name: Set up Go 1.13
