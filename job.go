@@ -47,7 +47,7 @@ func (j *Job) Release() {
 		if err != nil {
 			j.service.logger.Errorf("failed delete job: %v", err)
 		}
-		j.service.logger.Printf("success job. delete message[id=%v].", j.msg.MessageId)
+		j.service.logger.Printf("success job. delete message[id=%v].", *j.msg.MessageId)
 
 	} else {
 		if j.postponed {
